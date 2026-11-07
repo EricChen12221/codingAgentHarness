@@ -3,6 +3,7 @@ from pathlib import Path
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".idea"}
 MAX_OUTPUT_CHARS = 6000
+AUTO_APPROVE = False
 ALLOWED_COMMANDS = (
     ["pytest"],
     ["python", "-m", "pytest"],
@@ -32,4 +33,6 @@ def truncate(text: str) -> str:
 
 
 def ask_approval(prompt: str) -> bool:
+    if AUTO_APPROVE:
+        return True
     return input(f"\n{prompt} [y/N] ").strip().lower() == "y"

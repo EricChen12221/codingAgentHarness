@@ -31,10 +31,11 @@ def extract_text_tool_call(content: str):
     return None
 
 class Agent:
-    def __init__(self, model_name: str, workspace: str):
+    def __init__(self, model_name: str, workspace: str, verbose: bool = False):
         self.model_name = model_name
         self.tools = Tools(workspace)
         self.seen = set()
+        self.verbose = verbose
         self.messages = [{"role": "system", "content": SYSTEM}]
 
     def run(self, user_input: str) -> str:
@@ -56,7 +57,9 @@ class Agent:
                     self.seen.add(key)
                     result = self.tools.call(name, args)
 
-                print(f"  [result] {result[:300]}")
+                if self.verbose:
+                    print(f"  [result] {result[:300]}")
+                    
                 self.messages.append(
                     {"role": "tool", "tool_name": name, "content": result})
         return "Stopped: hit the step limit."
