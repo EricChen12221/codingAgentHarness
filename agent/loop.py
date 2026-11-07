@@ -56,7 +56,6 @@ class Agent:
                     self.seen.add(key)
                     result = self.tools.call(name, args)
 
-                result = self.tools.call(name, args)
                 print(f"  [result] {result[:300]}")
                 self.messages.append(
                     {"role": "tool", "tool_name": name, "content": result})
