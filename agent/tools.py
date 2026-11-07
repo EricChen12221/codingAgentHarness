@@ -3,6 +3,7 @@ import difflib
 import re
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 from .safety import (SKIP_DIRS, ask_approval, command_allowed,
@@ -49,12 +50,18 @@ class Tools:
                 break
         return truncate("\n".join(hits)) or "no matches"
 
-    # ---------- mutating tools (gated by the human) ----------
+    # mutating tools (gated by the human)
     def edit_file(self, path: str, old: str, new: str) -> str:
         p = resolve_in_workspace(self.root, path)
         text = p.read_text()
+        if old == new:
+            return "ERROR: 'old' and 'new' are identical. This edit changes nothing."
         if text.count(old) != 1:
-            return f"ERROR: 'old' must match exactly once; found {text.count(old)} matches."
+            close = difflib.get_close_matches(old.strip(), text.splitlines(), n=3, cutoff=0.5)
+            hint = "\n".join(close) or "(no similar lines found)"
+            return (f"ERROR: 'old' matched {text.count(old)} times; it must match exactly once. "
+                    f"Call read_file and copy the text exactly. Similar lines:\n{hint}")
+        
         updated = text.replace(old, new)
         diff = "".join(difflib.unified_diff(
             text.splitlines(True), updated.splitlines(True),
@@ -63,7 +70,7 @@ class Tools:
         if not ask_approval(f"Apply this edit to {path}?"):
             return "REJECTED by user. Do not retry the same edit; ask what they want."
         p.write_text(updated)
-        return f"Edited {path}."
+        return f"Edited {path}. Now call run_tests to verify before doing anything else."
 
     def create_file(self, path: str, content: str) -> str:
         p = resolve_in_workspace(self.root, path)
@@ -80,6 +87,8 @@ class Tools:
         argv = shlex.split(command)
         if not command_allowed(argv):
             return "ERROR: command not on the allowlist."
+        if argv[0] in ("python", "python3"):
+            argv[0] = sys.executable
         if not ask_approval(f"Run: {command}?"):
             return "REJECTED by user."
         try:
@@ -89,7 +98,7 @@ class Tools:
             return "ERROR: timed out after 120s."
         return truncate(f"exit code {r.returncode}\n{r.stdout}\n{r.stderr}")
 
-    # ---------- dispatch ----------
+    # dispatch 
     def call(self, name: str, args: dict) -> str:
         fn = getattr(self, name, None)
         if name not in {s["function"]["name"] for s in SCHEMAS} or fn is None:
