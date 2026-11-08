@@ -14,11 +14,11 @@ for m in json.loads((d / "transcript.json").read_text()):
     if role == "system":
         continue
     if role == "user":
-        print(f"USER: {m['content'][:200]!r}")
+        print(f"USER: {m['content'][:1000]!r}")
     elif role == "tool":
-        print(f"  <- {m['content'][:200]!r}")
+        print(f"  <- {m['content'][:1000]!r}")
     elif role == "assistant":
         for c in m.get("tool_calls") or []:
             print(f"-> {c['function']['name']}({c['function']['arguments']})")
         if m.get("content"):
-            print(f"   says: {m['content'][:200]!r}")
+            print(f"   says: {m['content'][:1000]!r}")

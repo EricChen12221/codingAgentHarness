@@ -13,6 +13,7 @@ Rules:
 - Make small, targeted edits with edit_file. Never guess file contents; read first.
 - After changing code, run_tests if tests exist.
 - If the user rejects an action, stop and ask what they want instead.
+- A failing assertion does not name the source file. Use search_files for the function name (for example ‘def average’) or list_files to find it, then read_file it.
 - When done, reply with a short summary and no tool call."""
 
 MAX_STEPS = 12
@@ -40,6 +41,8 @@ class Agent:
         self.verbose = verbose
         self.messages = [{"role": "system", "content": SYSTEM}]
         self.steps = 0
+        self.tests_passing = None 
+        self.nudges = 0
 
     def run(self, user_input: str) -> str:
         self.messages.append({"role": "user", "content": user_input})
@@ -48,6 +51,14 @@ class Agent:
             self.messages.append(reply)
             calls = reply.get("tool_calls") or extract_text_tool_call(reply.get("content", "")) or []
             if not calls:
+                if self.tests_passing is False and self.nudges < 3:
+                    self.nudges += 1
+                    self.messages.append({"role": "user", "content":
+                        "The tests are still failing, so you are not done. "
+                        "Do not describe a plan. Call a tool now: use list_files "
+                        "or search_files to find where the failing function is "
+                        "defined, then read_file on it."})
+                    continue
                 return reply.get("content", "")
             for c in calls:
                 name, args = c["function"]["name"], c["function"]["arguments"]
@@ -63,6 +74,8 @@ class Agent:
                             "Read the file again and change your approach.")
                 else:
                     result = self.tools.call(name, args)
+                    if name == "run_tests" and not result.startswith(("ERROR", "REJECTED")):
+                        self.tests_passing = result.startswith("exit code 0")
                     if result.startswith(("ERROR", "REJECTED")):
                         self.failed[key] = self.failed.get(key, 0) + 1
                     else:

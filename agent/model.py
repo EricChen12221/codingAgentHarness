@@ -16,7 +16,7 @@ def chat(model: str, messages: list[dict], tools: list[dict]) -> dict:
         "messages": messages,
         "tools": tools,
         "stream": False,
-        "options": {"temperature": 0.2, "num_ctx": 8192},
+        "options": {"temperature": 0.2, "num_ctx": 8192, "num_predict": 1024},
     }
     req = urllib.request.Request(
         OLLAMA_URL,
@@ -24,7 +24,7 @@ def chat(model: str, messages: list[dict], tools: list[dict]) -> dict:
         headers={"Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
+        with urllib.request.urlopen(req, timeout=180) as resp:
             return json.loads(resp.read())["message"]
-    except urllib.error.URLError as e:
+    except (urllib.error.URLError, OSError) as e:
         raise ModelError(f"Can't reach Ollama at {OLLAMA_URL}. Is it running? ({e})")
