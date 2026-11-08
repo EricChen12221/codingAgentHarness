@@ -2,7 +2,7 @@
 from pathlib import Path
 from fnmatch import fnmatch
 
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".idea"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".idea", ".pytest_cache"}
 MAX_OUTPUT_CHARS = 6000
 AUTO_APPROVE = False
 ALLOWED_COMMANDS = (

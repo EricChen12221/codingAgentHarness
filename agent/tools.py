@@ -13,6 +13,7 @@ from .safety import (SKIP_DIRS, ask_approval, command_allowed,
 class Tools:
     def __init__(self, root: str):
         self.root = Path(root).resolve()
+        self.read_since_edit = set()
 
     def list_files(self, path: str = ".") -> str:
         base = resolve_in_workspace(self.root, path)
@@ -29,41 +30,60 @@ class Tools:
     def read_file(self, path: str, start: int = 1, end: int = 400) -> str:
         p = resolve_in_workspace(self.root, path)
         lines = p.read_text(errors="replace").splitlines()
+        self.read_since_edit.add(str(p))
         chunk = lines[start - 1 : end]
         numbered = [f"{i}: {l}" for i, l in enumerate(chunk, start)]
         return truncate("\n".join(numbered)) or "(empty file)"
 
-    def search_files(self, pattern: str, path: str = ".") -> str:
-        base = resolve_in_workspace(self.root, path)
-        rx = re.compile(pattern)
+    def _grep(self, base, rx):
         hits = []
         for p in sorted(base.rglob("*")):
-            if p.is_dir() or any(part in SKIP_DIRS for part in p.parts):
+            rel = p.relative_to(self.root)
+            if p.is_dir() or any(part in SKIP_DIRS for part in rel.parts):
                 continue
             try:
                 for n, line in enumerate(p.read_text().splitlines(), 1):
                     if rx.search(line):
-                        hits.append(f"{p.relative_to(self.root)}:{n}: {line.strip()}")
+                        hits.append(f"{rel}:{n}: {line.strip()}")
             except (UnicodeDecodeError, OSError):
                 continue
             if len(hits) >= 50:
                 break
-        return truncate("\n".join(hits)) or "no matches"
+        return hits
+
+    def search_files(self, pattern: str, path: str = ".") -> str:
+        base = resolve_in_workspace(self.root, path)
+        try:
+            hits = self._grep(base, re.compile(pattern))
+        except re.error:
+            hits = []
+        if not hits:  # model probably meant a literal string
+            hits = self._grep(base, re.compile(re.escape(pattern)))
+        return truncate("\n".join(hits)) or f"no matches for {pattern!r} (tried regex and literal)"
 
     # mutating tools (gated by the human)
     def edit_file(self, path: str, old: str, new: str) -> str:
         p = resolve_in_workspace(self.root, path)
         if is_protected(self.root, p):
-                    return ("ERROR: test files are read-only. Fix the source code so the "
+            return ("ERROR: test files are read-only. Fix the source code so the "
                             "existing tests pass; do not modify tests.")
+        if str(p) not in self.read_since_edit:
+            return "ERROR: read_file this file first"
+                
+        self.read_since_edit.remove(str(p))
         text = p.read_text()
         if old == new:
             return "ERROR: 'old' and 'new' are identical. This edit changes nothing."
-        if text.count(old) != 1:
-            close = difflib.get_close_matches(old.strip(), text.splitlines(), n=3, cutoff=0.5)
-            hint = "\n".join(close) or "(no similar lines found)"
-            return (f"ERROR: 'old' matched {text.count(old)} times; it must match exactly once. "
-                    f"Call read_file and copy the text exactly. Similar lines:\n{hint}")
+        count = text.count(old)
+        if count != 1:
+            return (f"ERROR: 'old' matched {count} times; it must match exactly once.\n"
+                    f"Current content of {path} (no line numbers). Copy 'old' exactly from here:\n"
+                    f"{truncate(text)}")
+        #if text.count(old) != 1:
+            #close = difflib.get_close_matches(old.strip(), text.splitlines(), n=3, cutoff=0.5)
+            #hint = "\n".join(close) or "(no similar lines found)"
+            #return (f"ERROR: 'old' matched {text.count(old)} times; it must match exactly once. "
+            #        f"Call read_file and copy the text exactly. Similar lines:\n{hint}")
         
         updated = text.replace(old, new)
         diff = "".join(difflib.unified_diff(

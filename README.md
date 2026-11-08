@@ -9,4 +9,6 @@ Setup (M1 Mac):
     python main.py
 
 Try:  "Run the tests, find why they fail, and fix it."
-If tool calls misbehave, try:  python main.py --model qwen3:8b
+
+
+BASELINE: 14/25 for qwen2.5-coder:7b
