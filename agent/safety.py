@@ -1,5 +1,6 @@
 """All the 'can the model do this?' decisions live here, not in the tools."""
 from pathlib import Path
+from fnmatch import fnmatch
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".idea"}
 MAX_OUTPUT_CHARS = 6000
@@ -13,6 +14,13 @@ ALLOWED_COMMANDS = (
     ["npm", "test"],
 )
 
+
+def is_protected(root: Path, p: Path) -> bool:
+    rel = p.relative_to(root)
+    return (any(part in ("tests", "test") for part in rel.parts[:-1])
+            or fnmatch(rel.name, "test_*.py")
+            or fnmatch(rel.name, "*_test.py")
+            or rel.name == "conftest.py")
 
 def resolve_in_workspace(root: Path, rel: str) -> Path:
     """Resolve a model-supplied path; refuse anything that escapes the workspace."""

@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .safety import (SKIP_DIRS, ask_approval, command_allowed,
-                     resolve_in_workspace, truncate)
+                     resolve_in_workspace, is_protected, truncate)
 
 
 class Tools:
@@ -53,6 +53,9 @@ class Tools:
     # mutating tools (gated by the human)
     def edit_file(self, path: str, old: str, new: str) -> str:
         p = resolve_in_workspace(self.root, path)
+        if is_protected(self.root, p):
+                    return ("ERROR: test files are read-only. Fix the source code so the "
+                            "existing tests pass; do not modify tests.")
         text = p.read_text()
         if old == new:
             return "ERROR: 'old' and 'new' are identical. This edit changes nothing."
@@ -74,6 +77,9 @@ class Tools:
 
     def create_file(self, path: str, content: str) -> str:
         p = resolve_in_workspace(self.root, path)
+        if is_protected(self.root, p):
+                    return ("ERROR: test files are read-only. Fix the source code so the "
+                            "existing tests pass; do not modify tests.")
         if p.exists():
             return "ERROR: file exists. Use edit_file instead."
         print(f"\n--- new file {path} ---\n{content}")

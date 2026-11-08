@@ -5,6 +5,7 @@ import json
 
 SYSTEM = """You are a careful coding assistant working inside one project directory.
 Rules:
+- Test files are read-only. The tests define correct behavior; fix the source code to satisfy them.
 - ALWAYS call read_file on a file immediately before editing it. Never edit from memory.
 - In edit_file, copy ‘old’ exactly from read_file output, without the line-number prefix.
 - Always use the tool-calling mechanism. Never write tool calls as JSON in your message.
@@ -34,9 +35,11 @@ class Agent:
     def __init__(self, model_name: str, workspace: str, verbose: bool = False):
         self.model_name = model_name
         self.tools = Tools(workspace)
-        self.seen = set()
+        self.failed = {}
+        self.repeats = {}
         self.verbose = verbose
         self.messages = [{"role": "system", "content": SYSTEM}]
+        self.steps = 0
 
     def run(self, user_input: str) -> str:
         self.messages.append({"role": "user", "content": user_input})
@@ -49,17 +52,25 @@ class Agent:
             for c in calls:
                 name, args = c["function"]["name"], c["function"]["arguments"]
                 print(f"  [tool] {name}({args})")
+                self.steps += 1 
 
                 key = (name, json.dumps(args, sort_keys=True))
-                if key in self.seen and name != "run_tests":
-                    result = "ERROR: you already made this exact call. Try something different, or read_file first."
+                self.repeats[key] = self.repeats.get(key, 0) + 1
+                if self.repeats[key] > 3 and name != "run_tests":
+                    result = "ERROR: you've made this exact call 3 times. Try a different approach."
+                elif self.failed.get(key, 0) >= 2:
+                    result = ("ERROR: this exact call has failed twice already. "
+                            "Read the file again and change your approach.")
                 else:
-                    self.seen.add(key)
                     result = self.tools.call(name, args)
+                    if result.startswith(("ERROR", "REJECTED")):
+                        self.failed[key] = self.failed.get(key, 0) + 1
+                    else:
+                        self.failed.pop(key, None)
 
                 if self.verbose:
                     print(f"  [result] {result[:300]}")
-                    
+
                 self.messages.append(
                     {"role": "tool", "tool_name": name, "content": result})
         return "Stopped: hit the step limit."
