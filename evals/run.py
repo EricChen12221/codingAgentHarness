@@ -58,9 +58,13 @@ def run_one(fixture: Path, model: str) -> dict:
             shutil.copytree(work, out)
             (out / "transcript.json").write_text(json.dumps(agent.messages, indent=2))
 
-        return {"passed": passed, "steps": agent.steps,
-                "seconds": round(time.time() - start, 1), "error": error,
-                "hit_limit": result.startswith("Stopped")}
+        return {"passed": passed,
+                "steps": agent.steps,
+                "seconds": round(time.time() - start, 1),
+                "error": error,
+                "hit_limit": result.startswith("Stopped"),
+                "text_calls": agent.text_calls,
+                "nudges": agent.nudges}
 
 def main():
     ap = argparse.ArgumentParser()
@@ -84,8 +88,11 @@ def main():
         avg_time = sum(r["seconds"] for r in results) / a.runs
         hit_limit = sum(r["hit_limit"] for r in results)
         cheated = sum(r["error"] == "modified tests" for r in results)
-        print(f"{fx.name:<28} {passes}/{a.runs}   avg steps {avg_steps:.1f}   "
-                    f"avg {avg_time:.0f}s   limit {hit_limit}   edited-tests {cheated}")
+        text = sum(r["text_calls"] for r in results)
+        total_calls = sum(r["steps"] for r in results)
+        nudges = sum(r["nudges"] for r in results)
+        print(f"{fx.name:<28} {passes}/{a.runs}   avg steps {avg_steps:.1f}   avg {avg_time:.0f}s   "
+            f"limit {hit_limit}   text-calls {text}/{total_calls}   nudges {nudges}   cheated {cheated}")
         total_pass += passes
         total_runs += a.runs
     print(f"\nOVERALL {total_pass}/{total_runs}")

@@ -8,6 +8,8 @@ Rules:
 - Test files are read-only. The tests define correct behavior; fix the source code to satisfy them.
 - ALWAYS call read_file on a file immediately before editing it. Never edit from memory.
 - In edit_file, copy ‘old’ exactly from read_file output, without the line-number prefix.
+- When editing, ‘old’ and ‘new’ are whole lines with their leading indentation.
+- Never conclude that a test is wrong. If a test calls a function in a way that fails, change the function (for example its default arguments or edge-case handling) so the call works.
 - Always use the tool-calling mechanism. Never write tool calls as JSON in your message.
 - Explore before editing: list_files, search_files, read_file.
 - Make small, targeted edits with edit_file. Never guess file contents; read first.
@@ -17,6 +19,8 @@ Rules:
 - When done, reply with a short summary and no tool call."""
 
 MAX_STEPS = 12
+READ_ONLY = {"list_files", "read_file", "search_files"}
+
 def extract_text_tool_call(content: str):
     """Fallback: find a {"name":..., "arguments":...} object anywhere in the text."""
     decoder = json.JSONDecoder()
@@ -43,13 +47,18 @@ class Agent:
         self.steps = 0
         self.tests_passing = None 
         self.nudges = 0
+        self.text_calls = 0
 
     def run(self, user_input: str) -> str:
         self.messages.append({"role": "user", "content": user_input})
         for _ in range(MAX_STEPS):
             reply = model.chat(self.model_name, self.messages, SCHEMAS)
             self.messages.append(reply)
-            calls = reply.get("tool_calls") or extract_text_tool_call(reply.get("content", "")) or []
+            native = reply.get("tool_calls")
+            calls = native or extract_text_tool_call(reply.get("content", "")) or []
+            if calls and not native:
+                self.text_calls += len(calls)
+
             if not calls:
                 if self.tests_passing is False and self.nudges < 3:
                     self.nudges += 1
@@ -67,13 +76,14 @@ class Agent:
 
                 key = (name, json.dumps(args, sort_keys=True))
                 self.repeats[key] = self.repeats.get(key, 0) + 1
-                if self.repeats[key] > 3 and name != "run_tests":
+                if self.repeats[key] > 3 and name not in READ_ONLY and name != "run_tests":
                     result = "ERROR: you've made this exact call 3 times. Try a different approach."
                 elif self.failed.get(key, 0) >= 2:
                     result = ("ERROR: this exact call has failed twice already. "
                             "Read the file again and change your approach.")
                 else:
                     result = self.tools.call(name, args)
+
                     if name == "run_tests" and not result.startswith(("ERROR", "REJECTED")):
                         self.tests_passing = result.startswith("exit code 0")
                     if result.startswith(("ERROR", "REJECTED")):

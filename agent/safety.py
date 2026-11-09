@@ -37,7 +37,10 @@ def command_allowed(argv: list[str]) -> bool:
 def truncate(text: str) -> str:
     if len(text) <= MAX_OUTPUT_CHARS:
         return text
-    return text[:MAX_OUTPUT_CHARS] + f"\n...[truncated {len(text) - MAX_OUTPUT_CHARS} chars]"
+    half = MAX_OUTPUT_CHARS // 2
+    return (text[:half]
+            + f"\n...[truncated {len(text) - MAX_OUTPUT_CHARS} chars]...\n"
+            + text[-half:])
 
 
 def ask_approval(prompt: str) -> bool:
